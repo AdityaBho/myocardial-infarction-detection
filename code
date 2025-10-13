@@ -1,0 +1,84 @@
+import numpy as np
+import wfdb
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+
+# Example: list of file prefixes (without extension) for MI and healthy
+# You’ll replace these with the actual record names you use
+mi_records = [
+    "patient1_mi", "patient2_mi",  # … list 12 MI records
+    # ...
+]
+healthy_records = [
+    "patient_healthy"
+]
+
+def load_ecg_features(recname, wgdb_path=None, leads=[0,1,2,3,4,5,6,7,8,9,10,11]):
+    """
+    Load ECG signal for record `recname` from PTB-DB, extract simple features.
+    You may choose different feature extraction.
+    returns a 1D feature vector (numpy array)
+    """
+    # Read the record using wfdb (assumes you have .dat/.hea etc)
+    # Path handling: if wgdb_path is base directory containing the records
+    rec = wfdb.rdrecord(recname, pn_dir=wgdb_path)
+    signal = rec.p_signal  # shape: (n_samples, n_leads)
+    # Select the 12 standard leads (or subset)
+    sig12 = signal[:, leads]
+    # Option A: simple features — mean, std, etc across each lead
+    feat = []
+    for li in range(sig12.shape[1]):
+        x = sig12[:, li]
+        feat.append(np.mean(x))
+        feat.append(np.std(x))
+        feat.append(np.min(x))
+        feat.append(np.max(x))
+        # Add more if desired (skewness, kurtosis, etc.)
+    feat = np.array(feat)
+    return feat
+
+# Build dataset
+X = []
+y = []
+for rec in mi_records:
+    f = load_ecg_features(rec, wgdb_path="ptbdb")  # adjust path
+    X.append(f)
+    y.append(1)
+for rec in healthy_records:
+    f = load_ecg_features(rec, wgdb_path="ptbdb")
+    X.append(f)
+    y.append(0)
+
+X = np.vstack(X)
+y = np.array(y)
+
+# Optionally, scale features
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+# Split into train/test (for 13 samples, you might do leave-one-out or cross-validation)
+X_train, X_test, y_train, y_test = train_test_split(
+    X_scaled, y, test_size=0.2, random_state=42, stratify=y
+)
+
+# Initialize and train kNN
+k = 3  # you can tune this
+knn = KNeighborsClassifier(n_neighbors=k, metric='euclidean')
+knn.fit(X_train, y_train)
+
+# Prediction
+y_pred = knn.predict(X_test)
+
+# Evaluation
+print("Accuracy:", accuracy_score(y_test, y_pred))
+print("Confusion matrix:")
+print(confusion_matrix(y_test, y_pred))
+print("Classification report:")
+print(classification_report(y_test, y_pred))
+
+# Optionally, cross-validate
+scores = cross_val_score(knn, X_scaled, y, cv=5)
+print("Cross-val scores:", scores)
+print("Mean CV accuracy:", np.mean(scores))
