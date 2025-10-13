@@ -1,0 +1,46 @@
+import wfdb
+import os
+import numpy as np
+import pandas as pd
+
+def record_to_csv(record_path, output_csv_path):
+  
+    rec = wfdb.rdrecord(record_path)
+
+    signal = rec.p_signal
+    lead_names = rec.sig_name  # e.g. ["I", "II", "V1", ...]
+    fs = rec.fs
+    n = signal.shape[0]
+    time = np.arange(n) / fs
+
+    # build DataFrame
+    df = pd.DataFrame(signal, columns=lead_names)
+    df.insert(0, 'time', time)
+
+    # save to CSV
+    df.to_csv(output_csv_path, index=False)
+    print(f"Saved {output_csv_path}")
+
+def convert_all_in_folder(input_dir, output_dir):
+
+    os.makedirs(output_dir, exist_ok=True)
+    # find file bases (without extension) from .hea files
+    for root, dirs, files in os.walk(input_dir):
+        for fname in files:
+            if fname.lower().endswith('.hea'):
+                rec_base = fname[:-4]  # strip .hea
+                rec_path = os.path.join(root, rec_base)
+
+                # output CSV path
+                csv_fname = rec_base + '.csv'
+                out_csv = os.path.join(output_dir, csv_fname)
+
+                try:
+                    record_to_csv(rec_path, out_csv)
+                except Exception as e:
+                    print("Error converting", rec_path, ":", e)
+
+if __name__ == '__main__':
+    input_folder = "/content/ptb-diagnostic-ecg-database-1.0.0"  # Updated path
+    output_folder = "/content/ecg_csv_output" # Updated path
+    convert_all_in_folder(input_folder, output_folder)
